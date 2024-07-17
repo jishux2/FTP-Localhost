@@ -152,7 +152,7 @@ class FTPServer:
         # 如果文件存在，就发送一个成功的响应给客户端，包括文件名和文件大小
         if os.path.exists(filepath):
             filesize = os.path.getsize(filepath)
-            response = 'OK ' + filename + ' ' + str(filesize)
+            response = 'OK ' + str(filesize) + ' ' + filename
             client_sock.send(response.encode())
             # 打开文件，准备读取数据
             with open(filepath, 'rb') as f:

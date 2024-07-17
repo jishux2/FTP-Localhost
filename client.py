@@ -365,8 +365,8 @@ class FTPClient(QWidget):
         self.lock.acquire()
         # 如果响应以OK开头，说明文件存在，可以下载
         if response.startswith("OK"):
-            # 把响应分割为三部分，第一部分是OK，第二部分是文件名，第三部分是文件大小
-            _, self.filename, self.filesize= response.split(" ")
+            # 把响应分割为三部分，第一部分是OK，第二部分是文件大小，第三部分是文件名
+            _, self.filesize, self.filename = response.split(" ", 2)
             # 把文件大小转换为整数
             self.filesize = int(self.filesize)
             # 初始化已接收的字节数为0
