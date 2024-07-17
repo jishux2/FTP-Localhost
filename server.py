@@ -128,7 +128,10 @@ class FTPServer:
                 current_dir = os.path.dirname(current_dir.rstrip('\\'))
         # 否则，就拼接当前目录和目标目录，得到新的目录
         else:
-            current_dir = os.path.join(current_dir, target_dir + '\\')
+            # 如果目标目录不以\结尾，就加上\
+            if not target_dir.endswith('\\'):
+                target_dir += '\\'
+            current_dir = os.path.join(current_dir, target_dir)
         # 如果新的目录存在，就发送一个成功的响应给客户端
         if os.path.exists(current_dir):
             response = 'OK ' + current_dir
