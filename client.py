@@ -229,9 +229,9 @@ class FTPClient(QWidget):
         # 如果文件名不为空，就发送一个put命令，上传该文件
         if filename:
             self.send_command("put " + filename)
-        # 否则，什么也不做
+        # 否则，在控制台打印取消上传的消息
         else:
-            pass
+            print("取消上传")
 
     # 退出的槽函数
     def quit(self):
@@ -272,9 +272,16 @@ class FTPClient(QWidget):
                         self.progress_signal.emit(percent)
                 # 在控制台打印下载完成的消息
                 print("下载完成：", self.filename)
-            # 否则，什么也不做
+            # 否则，如果文件名为空，就丢弃服务器发送的文件内容
             else:
-                pass
+                # 循环接收数据，直到文件接收完毕
+                while self.received < self.filesize:
+                    # 接收数据
+                    data = self.sock.recv(BUFFER_SIZE)
+                    # 累加已接收的字节数
+                    self.received += len(data)
+                # 在控制台打印取消下载的消息
+                print("取消下载：", self.filename)
         # 否则，说明文件不存在，弹出错误提示框
         else:
             # 在子线程中，不再直接调用show_error方法，而是发送一个信号给主线程，并传递错误信息
@@ -328,9 +335,9 @@ class FTPClient(QWidget):
         # 如果文件名不为空，就把文件名放入队列中
         if filename:
             self.file_queue.put(filename)
-        # 否则，什么也不做
+        # 否则，如果文件名为空，就把一个空字符串放入队列中，表示用户没有选择文件
         else:
-            pass
+            self.file_queue.put('')
 
     # 定义一个槽函数，用于接收信号的参数，并弹出错误提示框
     def show_error(self, error):
