@@ -18,6 +18,15 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QProgressBar,
     QMessageBox,
+    QListWidget, # 新增
+    QListWidgetItem, # 新增
+    QStyle, # 新增
+    QSizePolicy,
+    QMenuBar, # 新增
+    QMenu, # 新增
+    QDialog, # 新增
+    QTextEdit, # 新增
+    QVBoxLayout # 新增
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -27,6 +36,39 @@ PORT = 8888  # FTP服务器的端口号，可以修改为其他值
 BUFFER_SIZE = 1024  # 缓冲区大小，用于接收和发送数据
 COMMANDS = ["ls", "cd", "get", "put", "quit"]  # 支持的FTP命令
 
+# 定义一个常量，用于存储Changelog的内容
+CHANGELOG = """
+版本 1.0.0
+- 实现了基本的FTP协议功能，包括ls, cd, get, put, quit
+- 使用PySide6创建了一个图形化界面，可以显示当前目录和文件列表，可以上传和下载文件，可以切换目录
+- 使用QProgressBar显示了传输进度
+- 使用QListWidget优化了文件列表的显示，可以双击文件或目录进行操作
+- 增加了Changelog的功能，可以查看版本更新的信息
+"""
+
+
+# 定义一个自定义的QDialog类，用于显示Changelog的内容
+class ChangelogDialog(QDialog):
+    # 初始化方法
+    def __init__(self, parent=None):
+        # 调用父类的初始化方法
+        super().__init__(parent)
+        # 设置窗口的标题，大小，模态
+        self.setWindowTitle('Changelog')
+        self.resize(400, 300)
+        self.setModal(True)
+        # 创建一个文本编辑控件，用于显示Changelog的内容
+        self.text_edit = QTextEdit()
+        # 设置文本编辑控件为只读，不可编辑
+        self.text_edit.setReadOnly(True)
+        # 设置文本编辑控件的内容为Changelog的内容
+        self.text_edit.setText(CHANGELOG)
+        # 创建一个垂直布局对象，用于放置文本编辑控件
+        self.layout = QVBoxLayout()
+        # 把文本编辑控件添加到布局中
+        self.layout.addWidget(self.text_edit)
+        # 设置窗口的布局为垂直布局
+        self.setLayout(self.layout)
 
 # 定义一个FTP客户端类，继承自QWidget
 class FTPClient(QWidget):
@@ -60,14 +102,22 @@ class FTPClient(QWidget):
         # 调用连接服务器的方法
         self.connect_server()
 
-    # 创建界面的方法
     def create_ui(self):
         # 设置窗口的标题，大小，居中显示
         self.setWindowTitle("FTP客户端")
+        self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.resize(600, 400)
         self.center()
         # 创建一个网格布局对象，用于放置各种控件
         self.layout = QGridLayout()
+        # 创建一个菜单栏对象，用于放置菜单
+        self.menu_bar = QMenuBar()
+        # 创建一个菜单对象，用于放置菜单项
+        self.menu = QMenu('菜单')
+        # 创建一个菜单项对象，用于显示Changelog
+        self.changelog_action = self.menu.addAction('Changelog')
+        # 把菜单添加到菜单栏中
+        self.menu_bar.addMenu(self.menu)
         # 创建一个标签对象，用于显示当前的目录
         self.dir_label = QLabel("当前目录：")
         # 创建一个文本框对象，用于显示和输入当前的目录
@@ -88,19 +138,47 @@ class FTPClient(QWidget):
         self.progress_bar = QProgressBar()
         # 创建一个按钮对象，用于退出程序
         self.quit_button = QPushButton("退出")
+        # 在创建界面的方法中，增加一个列表控件，用于显示文件列表
+        # 创建一个列表控件对象，用于显示文件列表
+        self.file_list = QListWidget()
+        # 设置列表控件的选择模式为单选
+        self.file_list.setSelectionMode(QListWidget.SingleSelection)
+
         # 把各个控件按照网格布局添加到窗口中
-        self.layout.addWidget(self.dir_label, 0, 0)
-        self.layout.addWidget(self.dir_edit, 0, 1, 1, 3)
-        self.layout.addWidget(self.dir_button, 0, 4)
-        self.layout.addWidget(self.file_label, 1, 0)
-        self.layout.addWidget(self.file_edit, 1, 1, 1, 3)
-        self.layout.addWidget(self.download_button, 1, 4)
-        self.layout.addWidget(self.upload_button, 2, 4)
-        self.layout.addWidget(self.progress_label, 3, 0)
-        self.layout.addWidget(self.progress_bar, 3, 1, 1, 4)
-        self.layout.addWidget(self.quit_button, 4, 4)
+        # 把菜单栏添加到网格布局的第一行，占据5列的空间
+        self.layout.addWidget(self.menu_bar, 0, 0, 1, 5)
+        # 把其他控件的行数都加1，因为第一行被菜单栏占用了
+        self.layout.addWidget(self.dir_label, 1, 0)
+        self.layout.addWidget(self.dir_edit, 1, 1, 1, 3)
+        self.layout.addWidget(self.dir_button, 1, 4)
+        self.layout.addWidget(self.file_label, 2, 0)
+        self.layout.addWidget(self.file_edit, 2, 1, 1, 3)
+        self.layout.addWidget(self.download_button, 2, 4)
+        self.layout.addWidget(self.upload_button, 3, 4)
+        self.layout.addWidget(self.progress_label, 4, 0)
+        self.layout.addWidget(self.progress_bar, 6, 0, 1, 4)
+        self.layout.addWidget(self.quit_button, 6, 4)
+        # 把列表控件添加到网格布局中，占据3行1列的空间
+        self.layout.addWidget(self.file_list, 3, 0, 3, 3)
+
         # 设置窗口的布局为网格布局
         self.setLayout(self.layout)
+        # 设置菜单栏的高度为30像素
+        self.menu_bar.setFixedHeight(30)
+        # 设置菜单栏的宽度为200像素
+        self.menu_bar.setFixedWidth(200)
+        # 设置“dir_button”的宽度为80像素
+        self.dir_button.setFixedWidth(80)
+        # 设置“dir_label”的宽度为80像素
+        self.dir_label.setFixedWidth(80)
+        # 设置“dir_button”的宽度为80像素
+        self.dir_button.setFixedWidth(80)
+        # 设置列表控件的最小宽度和最大宽度为300像素
+        self.file_list.setMinimumWidth(200)
+        self.file_list.setMaximumWidth(300)
+        # 设置列表控件的水平方向的大小策略为固定大小
+        self.file_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
         # 绑定各个按钮的点击事件到对应的槽函数
         self.dir_button.clicked.connect(self.change_dir)
         self.download_button.clicked.connect(self.download_file)
@@ -110,8 +188,11 @@ class FTPClient(QWidget):
         self.progress_signal.connect(self.progress_bar.setValue)
         # 绑定信号和槽函数
         self.file_dialog_signal.connect(self.show_file_dialog)
-        # 绑定信号和槽函数
         self.error_signal.connect(self.show_error)
+        # 绑定列表控件的双击事件到一个槽函数，用于处理双击文件或目录的操作
+        self.file_list.itemDoubleClicked.connect(self.double_click_file)
+        # 绑定菜单项的触发事件到一个槽函数，用于显示Changelog的对话框
+        self.changelog_action.triggered.connect(self.show_changelog)
 
     # 连接服务器的方法
     def connect_server(self):
@@ -185,6 +266,46 @@ class FTPClient(QWidget):
         self.dir_edit.setText(self.current_dir)
         # 把文件列表显示在文本框中
         self.file_edit.setText(file)
+        # 清空列表控件中的所有项目
+        self.file_list.clear()
+        # 创建一个列表项目对象，用于显示返回上级目录的选项
+        back_item = QListWidgetItem('..')
+        # 设置项目的图标为一个返回的图标
+        back_item.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        # 设置项目类型为返回
+        back_item.setData(Qt.UserRole, 'back') 
+        # 把项目添加到列表控件的最上边
+        self.file_list.insertItem(0, back_item)
+        # 把文件列表用换行符分割成一个列表，赋值给files
+        files = file.split('\n')
+        # 循环遍历文件列表
+        for file in files:
+            # 如果当前目录是\\，就说明是所有磁盘，就直接显示磁盘名
+            if self.current_dir == '\\':
+                # 创建一个列表项目对象，用于显示磁盘名
+                item = QListWidgetItem(file)
+                # 设置项目的图标为一个磁盘的图标
+                item.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
+                # 设置项目的类型为磁盘
+                item.setData(Qt.UserRole, 'drive') 
+                # 如果文件名以\结尾，说明是一个目录
+            elif file.endswith('\\'):
+                # 创建一个列表项目对象，用于显示目录名，去掉结尾的\
+                item = QListWidgetItem(file.rstrip('\\'))
+                # 设置项目的图标为一个文件夹的图标
+                item.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
+                # 设置项目的类型为目录
+                item.setData(Qt.UserRole, 'directory') 
+            # 否则，说明是一个文件
+            else:
+                # 创建一个列表项目对象，用于显示文件名
+                item = QListWidgetItem(file)
+                # 设置项目的图标为一个文件的图标
+                item.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
+                # 设置项目的类型为文件
+                item.setData(Qt.UserRole, 'file') 
+            # 把项目添加到列表控件中
+            self.file_list.addItem(item)
 
     # 更新当前目录的方法
     def update_dir(self, response):
@@ -349,6 +470,27 @@ class FTPClient(QWidget):
         msg_box.setStandardButtons(QMessageBox.Ok)
         # 显示消息框
         msg_box.exec_()
+
+    # 定义一个槽函数，用于处理双击文件或目录的操作
+    def double_click_file(self, item):
+        # 获取双击的项目的类型
+        item_type = item.data(Qt.UserRole)
+        # 如果类型是返回，说明是返回上级目录的选项，就发送一个cd ..命令，返回上一级目录
+        if item_type == 'back':
+            self.send_command('cd ..')
+        # 否则，如果类型是目录或磁盘，就发送一个cd命令，切换到该目录
+        elif item_type == 'directory' or item_type == 'drive':
+            self.send_command('cd ' + item.text())
+        # 否则，如果类型是文件，就发送一个get命令，下载该文件
+        elif item_type == 'file':
+            self.send_command('get ' + item.text())
+
+    # 在FTPClient类中，增加一个槽函数，用于显示Changelog的对话框
+    def show_changelog(self):
+        # 创建一个ChangelogDialog对象，传入self作为父窗口
+        self.changelog_dialog = ChangelogDialog(self)
+        # 显示ChangelogDialog
+        self.changelog_dialog.show()
 
     # 把窗口居中显示的方法
     def center(self):

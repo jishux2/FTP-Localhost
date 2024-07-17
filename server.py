@@ -86,30 +86,56 @@ class FTPServer:
 
     # 发送当前目录和文件列表给客户端的方法
     def list_dir(self, client_sock, current_dir):
-        # 获取当前目录下的所有文件和文件夹
-        files = os.listdir(current_dir)
-        # 把当前目录和文件列表拼接成一个字符串，用换行符分隔
-        response = current_dir + '\n' + '\n'.join(files)
+        # 如果当前目录是\\，就列出所有磁盘
+        if current_dir == '\\':
+            # 获取所有磁盘的名称
+            drives = os.popen('wmic logicaldisk get name').read().split()
+            # 去掉列表中的第一个元素，它是一个标题
+            drives.pop(0)
+            # 把当前目录和磁盘列表拼接成一个字符串，用换行符分隔
+            response = current_dir + '\n' + '\n'.join(drives)
+        # 否则，就列出当前目录下的所有文件和文件夹
+        else:
+            # 获取当前目录下的所有文件和文件夹
+            files = os.listdir(current_dir)
+            # 创建一个空列表，用于存储加上/的目录名
+            dir_files = []
+            # 循环遍历文件列表
+            for file in files:
+                # 拼接当前目录和文件名，得到文件的完整路径
+                filepath = os.path.join(current_dir, file)
+                # 如果文件是一个目录，就在文件名后面加上/
+                if os.path.isdir(filepath):
+                    file += '\\'
+                # 把文件名添加到列表中
+                dir_files.append(file)
+            # 把当前目录和文件列表拼接成一个字符串，用换行符分隔
+            response = current_dir + '\n' + '\n'.join(dir_files)
         # 发送响应给客户端
         client_sock.send(response.encode())
 
     # 切换当前目录并发送结果给客户端的方法
     def change_dir(self, client_sock, command, current_dir):
         # 把命令分割为两部分，第一部分是cd，第二部分是目标目录
-        _, target_dir = command.split(' ')
+        _, target_dir = command.split(' ', 1)
         # 如果目标目录是..，就返回上一级目录
         if target_dir == '..':
-            current_dir = os.path.dirname(current_dir)
+            # 如果当前目录是磁盘的根目录，就返回一个特殊的目录，表示所有磁盘
+            if current_dir.endswith(':\\'):
+                current_dir = '\\'
+            # 否则，就返回上一级目录
+            else:
+                current_dir = os.path.dirname(current_dir.rstrip('\\'))
         # 否则，就拼接当前目录和目标目录，得到新的目录
         else:
-            current_dir = os.path.join(current_dir, target_dir)
+            current_dir = os.path.join(current_dir, target_dir + '\\')
         # 如果新的目录存在，就发送一个成功的响应给客户端
         if os.path.exists(current_dir):
             response = 'OK ' + current_dir
         # 否则，就发送一个失败的响应给客户端
         else:
             response = '目录不存在'
-        # 发送响应给客户端
+        # 发送响应给客户端  
         client_sock.send(response.encode())
         # 返回新的当前目录
         return current_dir
@@ -117,7 +143,7 @@ class FTPServer:
     # 发送文件给客户端的方法
     def send_file(self, client_sock, command, current_dir):
         # 把命令分割为两部分，第一部分是get，第二部分是文件名
-        _, filename = command.split(' ')
+        _, filename = command.split(' ', 1)
         # 拼接当前目录和文件名，得到文件的完整路径
         filepath = os.path.join(current_dir, filename)
         # 如果文件存在，就发送一个成功的响应给客户端，包括文件名和文件大小
