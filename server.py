@@ -11,13 +11,15 @@ import time
 HOST = '127.0.0.1' # FTP服务器的IP地址，可以修改为其他值
 PORT = 8888 # FTP服务器的端口号，可以修改为其他值
 BUFFER_SIZE = 1024 # 缓冲区大小，用于接收和发送数据
-COMMANDS = ['ls', 'cd', 'get', 'put', 'quit'] # 支持的FTP命令
+COMMANDS = ['ls', 'cd', 'get', 'put', 'restart', 'quit'] # 支持的FTP命令
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # FTP服务器的根目录，可以修改为其他值
 
 # 定义一个FTP服务器类
 class FTPServer:
     # 初始化方法
     def __init__(self):
+        # 增加一个属性，用于存储断点的位置
+        self.breakpoint = 0
         # 创建一个socket对象，用于监听客户端的连接
         self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 设置socket的选项，允许重用地址，避免端口占用的问题
@@ -74,6 +76,9 @@ class FTPServer:
                 elif command.startswith('put'):
                     # 如果是put命令，就接收文件并保存
                     self.receive_file(client_sock, command, current_dir)
+                elif command.startswith('restart'):
+                    # 如果是restart命令，就设置断点
+                    self.set_breakpoint(client_sock, command)
                 elif command == 'quit':
                     # 如果是quit命令，就关闭客户端的socket，退出循环
                     client_sock.close()
@@ -98,15 +103,19 @@ class FTPServer:
         else:
             # 获取当前目录下的所有文件和文件夹
             files = os.listdir(current_dir)
-            # 创建一个空列表，用于存储加上/的目录名
+            # 创建一个空列表，用于存储加上\的目录名和文件大小
             dir_files = []
             # 循环遍历文件列表
             for file in files:
                 # 拼接当前目录和文件名，得到文件的完整路径
                 filepath = os.path.join(current_dir, file)
-                # 如果文件是一个目录，就在文件名后面加上/
+                # 如果文件是一个目录，就在文件名后面加上\
                 if os.path.isdir(filepath):
                     file += '\\'
+                # 否则，就获取文件的大小，以字节为单位
+                else:
+                    size = os.path.getsize(filepath)
+                    file = str(size) + ' ' + file
                 # 把文件名添加到列表中
                 dir_files.append(file)
             # 把当前目录和文件列表拼接成一个字符串，用换行符分隔
@@ -158,16 +167,27 @@ class FTPServer:
             with open(filepath, 'rb') as f:
                 # 初始化已发送的字节数为0
                 sent = 0
-                # 循环读取数据，直到文件发送完毕
-                while sent < filesize:
-                    # 读取数据
-                    data = f.read(BUFFER_SIZE)
-                    # 发送数据
-                    client_sock.send(data)
-                    # 累加已发送的字节数
-                    sent += len(data)
-            # 在控制台打印发送完成的消息
-            print('发送完成：', filename)
+                # 增加一个try-except语句，用于捕获异常
+                try:
+                    # 如果断点不为0，就从断点处开始读取数据
+                    if self.breakpoint != 0:
+                        # 移动文件指针到断点处
+                        f.seek(self.breakpoint)
+                        # 从断点处开始累加已发送的字节数
+                        sent = self.breakpoint
+                    # 循环读取数据，直到文件发送完毕
+                    while sent < filesize:
+                        # 读取数据
+                        data = f.read(BUFFER_SIZE)
+                        # 发送数据
+                        client_sock.send(data)
+                        # 累加已发送的字节数
+                        sent += len(data)
+                    # 在控制台打印发送完成的消息
+                    print('发送完成：', filename)
+                # 如果发生异常，就发送一个异常的响应给客户端，并打印异常信息
+                except Exception as e:
+                    print('发送异常：', e)
         # 否则，就发送一个失败的响应给客户端
         else:
             response = '文件不存在'
@@ -185,15 +205,17 @@ class FTPServer:
         print(base_filename)
         print(filepath)
         # 如果文件不存在，就发送一个成功的响应给客户端，包括文件名
-        if not os.path.exists(filepath):
-            response = 'OK ' + filename
-            client_sock.send(response.encode())
-            # 接收客户端发送的文件大小
-            filesize = int(client_sock.recv(BUFFER_SIZE).decode())
-            # 打开文件，准备写入数据
-            with open(filepath, 'wb') as f:
-                # 初始化已接收的字节数为0
-                received = 0
+        # if not os.path.exists(filepath):
+        response = 'OK ' + filename
+        client_sock.send(response.encode())
+        # 接收客户端发送的文件大小
+        filesize = int(client_sock.recv(BUFFER_SIZE).decode())
+        # 在接收文件的方法中，增加一个try-except语句，用于捕获异常
+        try:
+            # 以追加模式或写入模式打开文件
+            with open(filepath, 'ab' if self.breakpoint != 0 else 'wb') as f:
+                # 从断点处开始累加已接收的字节数
+                received = self.breakpoint
                 # 循环接收数据，直到文件接收完毕
                 while received < filesize:
                     # 接收数据
@@ -204,10 +226,22 @@ class FTPServer:
                     received += len(data)
             # 在控制台打印接收完成的消息
             print('接收完成：', filename)
+        # 如果发生异常，就打印异常信息
+        except Exception as e:
+            print('接收异常：', e)
         # 否则，就发送一个失败的响应给客户端
-        else:
-            response = '文件已存在'
-            client_sock.send(response.encode())
+        # else:
+        #     response = '文件已存在'
+        #     client_sock.send(response.encode())
+
+    # 设置断点的方法
+    def set_breakpoint(self, client_sock, command):
+        # 获取断点的位置
+        _, self.breakpoint = command.split(' ', 1)
+        self.breakpoint = int(self.breakpoint)
+        # 发送断点给客户端
+        response = str(self.breakpoint)
+        client_sock.send(response.encode())
 
 # 主函数
 if __name__ == '__main__':
