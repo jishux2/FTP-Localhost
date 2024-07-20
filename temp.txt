@@ -1,0 +1,13 @@
+        self.file_frame = QFrame()
+        self.file_layout = QGridLayout()
+        self.file_layout.addWidget(self.file_label, 0, 0)
+        self.file_layout.addWidget(self.file_list, 1, 0, 7, 2)
+        # 设置网格布局的边距为0
+        self.file_layout.setContentsMargins(2, 0, 0, 0)
+        # 把网格布局设置为框架的布局
+        self.file_frame.setLayout(self.file_layout)
+        # 把列表控件添加到网格布局中，占据6行2列的空间
+        self.layout.addWidget(self.file_frame, 2, 0, 7, 2)
+        # 把断点按钮和清除按钮添加到网格布局中，占据1行2列的空间
+        self.layout.addWidget(self.break_button, 9, 0)
+        self.layout.addWidget(self.clear_button, 9, 1)

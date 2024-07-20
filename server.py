@@ -169,6 +169,7 @@ class FTPServer:
                 sent = 0
                 # 增加一个try-except语句，用于捕获异常
                 try:
+                    print(self.breakpoint)
                     # 如果断点不为0，就从断点处开始读取数据
                     if self.breakpoint != 0:
                         # 移动文件指针到断点处
@@ -184,6 +185,7 @@ class FTPServer:
                         # 累加已发送的字节数
                         sent += len(data)
                     # 在控制台打印发送完成的消息
+                    print(sent)
                     print('发送完成：', filename)
                 # 如果发生异常，就发送一个异常的响应给客户端，并打印异常信息
                 except Exception as e:
