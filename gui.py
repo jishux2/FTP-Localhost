@@ -555,6 +555,9 @@ class FTPClientGUI(QMainWindow):
         self.file_list.insertItem(0, back_item)
         # 把文件列表用换行符分割成一个列表，赋值给files
         files = file.split('\n')
+        # 创建两个空列表，用于存储目录和文件
+        dirs = []
+        file_items = []
         # 循环遍历文件列表
         for file in files:
             # 如果当前目录是\\，就说明是所有磁盘，就直接显示磁盘名
@@ -565,7 +568,9 @@ class FTPClientGUI(QMainWindow):
                 item.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
                 # 设置项目的类型为磁盘
                 item.setData(Qt.UserRole, 'drive') 
-                # 如果文件名以\结尾，说明是一个目录
+                # 把项目添加到目录列表中
+                dirs.append(item)
+            # 如果文件名以\结尾，说明是一个目录
             elif file.endswith('\\'):
                 # 创建一个列表项目对象，用于显示目录名，去掉结尾的\
                 item = QListWidgetItem(file.rstrip('\\'))
@@ -573,9 +578,11 @@ class FTPClientGUI(QMainWindow):
                 item.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
                 # 设置项目的类型为目录
                 item.setData(Qt.UserRole, 'directory') 
+                # 把项目添加到目录列表中
+                dirs.append(item)
             # 否则，说明是一个文件
             else:
-                # 把文件名分割为两部分，第一部分是文件名，第二部分是文件大小（字节）
+                # 把文件名分割为两部分，第一部分是文件大小（字节），第二部分是文件名
                 size, filename = file.split(' ', 1)
                 # 把文件大小转换为整数
                 size = int(size)
@@ -591,6 +598,12 @@ class FTPClientGUI(QMainWindow):
                 item.setData(Qt.UserRole, 'file') 
                 # 设置项目的文件大小属性为字节单位的大小
                 item.setData(Qt.UserRole + 1, size)
+                # 把项目添加到文件列表中
+                file_items.append(item)
+        # 把目录列表和文件列表合并起来，赋值给items
+        items = dirs + file_items
+        # 循环遍历合并后的列表
+        for item in items:
             # 把项目添加到列表控件中
             self.file_list.addItem(item)
 
