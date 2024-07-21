@@ -6,12 +6,13 @@ import os
 import sys
 import threading
 import time
+import db_manager
 
 # 定义一些常量
 HOST = '127.0.0.1' # FTP服务器的IP地址，可以修改为其他值
 PORT = 8888 # FTP服务器的端口号，可以修改为其他值
 BUFFER_SIZE = 1024 # 缓冲区大小，用于接收和发送数据
-COMMANDS = ['ls', 'cd', 'get', 'put', 'restart', 'quit'] # 支持的FTP命令
+COMMANDS = ['ls', 'cd', 'get', 'put', 'restart', 'login', 'register', 'quit'] # 支持的FTP命令
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # FTP服务器的根目录，可以修改为其他值
 
 # 定义一个FTP服务器类
@@ -44,6 +45,8 @@ class FTPServer:
 
     # 处理客户端的请求的方法
     def handle_client(self, client_sock, client_addr):
+        # 在子线程中创建一个DBManager对象
+        db = db_manager.DBManager()
         # 发送一个欢迎消息给客户端
         client_sock.send('欢迎使用FTP服务器'.encode())
         # 初始化客户端的当前目录为服务器的根目录
@@ -79,6 +82,12 @@ class FTPServer:
                 elif command.startswith('restart'):
                     # 如果是restart命令，就设置断点
                     self.set_breakpoint(client_sock, command)
+                elif command.startswith('login'):
+                    # 如果是login命令，就处理登录请求
+                    self.verify_user_credentials(client_sock, command, db)
+                elif command.startswith('register'):
+                    # 如果是register命令，就处理注册请求
+                    self.add_user_to_database(client_sock, command, db)
                 elif command == 'quit':
                     # 如果是quit命令，就关闭客户端的socket，退出循环
                     client_sock.close()
@@ -244,6 +253,32 @@ class FTPServer:
         # 发送断点给客户端
         response = str(self.breakpoint)
         client_sock.send(response.encode())
+
+    # 验证用户的凭证，即用户名和密码的方法
+    def verify_user_credentials(self, client_sock, command, db):
+        # 从命令中分离出用户名和密码
+        username, password = command.split(' ')[1:]
+        # 调用DBManager对象的query_user方法，查询用户是否存在
+        result = db.query_user(username, password)
+        # 如果结果为True，表示用户存在，发送一个成功的响应给客户端
+        if result:
+            client_sock.send(f"OK 登录成功".encode())
+        # 否则，表示用户不存在，发送一个失败的响应给客户端
+        else:
+            client_sock.send(f"ERROR 用户名或密码错误".encode())
+
+    # 将用户添加到数据库中的方法
+    def add_user_to_database(self, client_sock, command, db):
+        # 从命令中分离出用户名和密码
+        username, password = command.split(' ')[1:]
+        # 调用DBManager对象的insert_user方法，插入用户到数据库
+        result = db.insert_user(username, password)
+        # 如果结果为True，表示插入成功，发送一个成功的响应给客户端
+        if result:
+            client_sock.send(f"OK 注册成功".encode())
+        # 否则，表示插入失败，发送一个失败的响应给客户端
+        else:
+            client_sock.send(f"ERROR 用户名已存在".encode())
 
 # 主函数
 if __name__ == '__main__':

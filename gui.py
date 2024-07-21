@@ -64,7 +64,7 @@ CHANGELOG = """
 - 将主函数的代码拆分为main.py文件，使client.py文件仅负责FTP客户端的逻辑
 - 在传输完成后及时同步删除断点，防止对后续传输造成干扰
 
-版本 2.1.0
+版本 2.0.0
 - 重建用户界面
   - 主窗口改为由QMainWindow类派生，并使用多层窗口部件和不同类型的布局（垂直、水平、网格）来构建界面
   - 删除冗余的控件和属性配置，精简代码逻辑
@@ -79,12 +79,20 @@ CHANGELOG = """
 - 在窗口关闭按钮的点击事件中，执行发送quit命令的方法，以保证在窗口关闭前，与服务器正确地断开连接
 - 修改若干bug
 - 待实现：登录功能
+
+版本 2.1.0
+- 设计并实现用户的登录和注册模块
+  - 支持login和register命令，可以验证或创建用户的身份信息，以便访问FTP服务器
+  - 利用PySide6构建登录窗口，实现与服务器的连接和登录或注册的请求发送，嵌入一个注册窗口，提供更多的功能选项
+  - 为登录窗口添加一个方法，用于处理窗口关闭事件，以保证在与服务器建立连接的情况下，能够正确地释放资源
+  - 利用sqlite3模块，在服务器端建立和管理一个数据库文件，用于保存用户的用户名和密码信息
+  - 增加了对用户名和密码的约束
 """
 
 # 定义一个常量，用于存储帮助的内容
 HELP = """
 本文档是FTP客户端的使用指南，介绍了它的主要功能和操作步骤：
-- 左侧文件列表显示当前目录的内容，双击文件夹可进入，双击文件可下载，双击返回项可回到上级目录
+- 左侧文件列表显示当前目录的内容，双击文件夹可进入，双击文件可下载，双击返回项可回到上级目录。右键单击文件，即可弹出菜单，显示文件的大小
 - 右上控制台呈现FTP客户端的输出，如命令结果，传输信息，错误提示等
 - 右下输入框可输入FTP命令，如ls, cd, get, put等。Ctrl+Enter换行，Enter或发送按钮执行。发送按钮菜单可选Enter或Ctrl+Enter发送模式
 - 状态栏位于窗口的底部，用一个进度条展示文件传输的百分比。另外一个标签显示取消下载后释放缓冲区的状态。一个按钮可以切换传输的暂停或继续
@@ -116,6 +124,8 @@ class FTPClientGUI(QMainWindow):
     clear_signal = Signal(int)
     # 定义一个信号，用于传递要写入的文本
     output_signal = Signal(str)
+    # 定义一个信号，用于传递服务器信息的字符串
+    server_info_signal = Signal(str)
 
 
     # 初始化方法
@@ -138,6 +148,8 @@ class FTPClientGUI(QMainWindow):
         # 增加一个属性，用于存储清空进度的百分比
         # 初始值设为0，表示还没有开始清空
         self.clear_percent = 0
+        # 定义一个属性，用于存储服务器信息
+        self.server_info = ''
         
         # 创建一个菜单栏对象，用于放置菜单
         self.menu_bar = self.menuBar()
@@ -330,12 +342,20 @@ class FTPClientGUI(QMainWindow):
         # 设置分割器中的框架的初始大小，让上半部分占460像素，下半部分占140像素
         self.v_splitter.setSizes([460, 140])
 
-        # 创建一个水平布局对象，用于放置目录标签、目录编辑框和切换目录按钮
+        # 创建一个标签对象，用于显示欢迎用户的信息
+        self.user_label = QLabel()
+        # 创建一个标签对象，用于显示连接到的服务器的信息
+        self.server_label = QLabel()
+
+        # 创建一个水平布局对象，用于放置目录标签、目录编辑框和切换目录按钮，以及用户和服务器信息
         self.dir_layout = QHBoxLayout()
-        # 把目录标签、目录编辑框和切换目录按钮添加到水平布局中
+        # 把目录标签、目录编辑框和切换目录按钮，以及用户和服务器信息添加到水平布局中
         self.dir_layout.addWidget(self.dir_label)
         self.dir_layout.addWidget(self.dir_edit)
         self.dir_layout.addWidget(self.dir_button)
+        self.dir_layout.addStretch()
+        self.dir_layout.addWidget(self.user_label)
+        self.dir_layout.addWidget(self.server_label)
         # 设置水平布局的内容边距为8像素，上下边距为0像素
         self.dir_layout.setContentsMargins(8, 0, 8, 0)
 
@@ -415,12 +435,22 @@ class FTPClientGUI(QMainWindow):
         self.clear_signal.connect(self.update_clear_label)
         # 把信号和一个槽函数连接起来，用于更新output_edit的内容
         self.output_signal.connect(self.write_output)
+        # 把信号和一个槽函数连接起来，用于更新服务器信息标签的文本
+        self.server_info_signal.connect(self.change_server_info)
 
         # 绑定列表控件的双击事件到一个槽函数，用于处理双击文件或目录的操作
         self.file_list.itemDoubleClicked.connect(self.double_click_file)
         # 绑定列表控件的右击事件到一个槽函数，用于弹出菜单
         self.file_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_list.customContextMenuRequested.connect(self.show_menu)
+
+    # 接收用户名和服务器信息，并设置标签的文本的方法
+    def set_user_and_server(self, username, server_info):
+        # 设置用户标签的文本为欢迎用户的信息，用HTML标签设置字体颜色为蓝色
+        self.user_label.setText(f"<font color='blue'>欢迎，{username}</font>")
+        # 设置服务器标签的文本为连接到的服务器的信息，用HTML标签设置字体颜色为绿色
+        self.server_label.setText(f"<font color='green'>你已连接到：{server_info}</font>")
+        self.server_info = server_info
 
     # 定义一个方法，用于设置发送模式
     def set_send_mode(self, key):
@@ -733,9 +763,10 @@ class FTPClientGUI(QMainWindow):
                 # 否则，如果用户选择否，就什么也不做
                 else:
                     pass
-                # 设置中断标志为False，修改按钮的图标为暂停
+                # 设置中断标志为False，修改按钮的图标为暂停，更新服务器信息
                 self.ftp_client.stopped = False
                 self.connect_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+                self.change_server_info(f"你已连接到：{self.server_info}")
         # 否则，弹出错误提示框
         else:
             self.show_error("没有正在传输的文件")
@@ -805,6 +836,11 @@ class FTPClientGUI(QMainWindow):
         self.output_edit.append(text)
         # 把output_edit的光标移动到末尾，以便显示最新的文本
         self.output_edit.moveCursor(QTextCursor.End)
+
+    # 定义一个槽函数，用于改变服务器信息标签的文本
+    def change_server_info(self, server_info):
+        # 设置服务器信息标签的文本为传入的字符串，用HTML标签设置字体颜色为绿色
+        self.server_label.setText(f"<font color='green'>{server_info}</font>")
 
     # 把窗口居中显示的方法
     def center(self):

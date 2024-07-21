@@ -15,16 +15,20 @@ from gui import FTPClientGUI
 HOST = "127.0.0.1"  # FTP服务器的IP地址，可以修改为其他值
 PORT = 8888  # FTP服务器的端口号，可以修改为其他值
 BUFFER_SIZE = 1024  # 缓冲区大小，用于接收和发送数据
-COMMANDS = ["ls", "cd", "get", "put", "restart", "quit"]  # 支持的FTP命令
+COMMANDS = ["ls", "cd", "get", "put", "restart", 'login', 'register', "quit"]  # 支持的FTP命令
 
 
 # 定义一个FTP客户端类
 class FTPClient():
 
-    # 初始化方法
-    def __init__(self):
+    # 初始化方法，接受IP地址和端口号作为参数
+    def __init__(self, host, port):
         # 调用父类的初始化方法
         super().__init__()
+        # 增加一个属性，用于存储FTP服务器的IP地址
+        self.host = host
+        # 增加一个属性，用于存储FTP服务器的端口号
+        self.port = port
         # 创建一个socket对象，用于和FTP服务器通信
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 设置socket的超时时间为10秒，如果超过10秒没有收到服务器的响应，就认为连接断开
@@ -39,26 +43,26 @@ class FTPClient():
         self.gui.create_ui(self)
         # 调用初始化数据的方法
         self.init_data()
-        # 调用连接服务器的方法
-        self.connect_server()
 
-    # 连接服务器的方法
+    # 连接服务器的方法，返回一个布尔值，表示是否连接成功
     def connect_server(self):
         # 尝试连接到FTP服务器
         try:
-            self.sock.connect((HOST, PORT))
+            self.sock.connect((self.host, self.port))
             # 接收服务器的欢迎消息
             msg = self.sock.recv(BUFFER_SIZE).decode()
             # 在控制台打印欢迎消息
             self.gui.write_output(f"<font color='black'>{msg}</font>")
             # 发送一个ls命令，获取当前目录和文件列表
             self.send_command("ls")
-        # 如果发生异常，弹出错误提示框
+            # 返回True，表示连接成功
+            return True
+        # 如果发生异常，抛出异常
         except Exception as e:
             self.stopped = True
             self.gui.change_icon('play')
-            self.gui.show_error(str(e))
-
+            raise e
+            
     # 初始化数据的方法
     def init_data(self):
         # 初始化一些属性，用于存储当前的目录，文件名，文件大小，已传输的字节数等信息
@@ -73,8 +77,8 @@ class FTPClient():
         self.download_filename = ''
         # 创建一个队列对象，用于存储主线程发送的文件名
         self.file_queue = queue.Queue()
-        # 创建一个队列对象，用于存储线程的执行结果
-        # self.result_queue = queue.Queue()
+        # 创建一个队列对象，用于存储注册登录的执行结果
+        self.result_queue = queue.Queue()
         # 清空进度条
         self.gui.progress_bar.setValue(0)
 
@@ -127,6 +131,10 @@ class FTPClient():
             elif command.startswith('restart'):
                 # 如果是restart命令，就设置断点
                 self.restart(response)
+            # 如果是login或register命令，表示是登录或注册请求
+            elif command.startswith('login') or command.startswith('register'):
+                # 返回一个布尔值，表示服务器的响应是否以OK开头，OK表示成功，ERROR表示失败
+                return response.startswith('OK')
             elif command == "quit":
                 # 如果是quit命令，就关闭socket，退出程序
                 self.sock.close()
@@ -281,6 +289,8 @@ class FTPClient():
                     self.stopped = True
                     # 发送一个信号给主线程，让主线程修改按钮的图标为继续
                     self.gui.icon_signal.emit('play')
+                    # 修改服务器信息
+                    self.gui.server_info_signal.emit('已断开连接，点击右下角按钮重连')
                     # 在控制台打印下载异常的内容
                     self.gui.output_signal.emit(f"<font color='red' face='bold'>下载异常：{e}</font>")
                     # 记录结束下载的时间
@@ -414,6 +424,8 @@ class FTPClient():
                     self.stopped = True
                     # 发送一个信号给主线程，让主线程修改按钮的图标为继续
                     self.gui.icon_signal.emit('play')
+                    # 修改服务器信息
+                    self.gui.server_info_signal.emit('已断开连接，点击右下角按钮重连')
                     # 在控制台打印上传异常的内容
                     self.gui.output_signal.emit(f"<font color='red' face='bold'>上传异常：{e}</font>")
                     # 记录结束上传的时间
