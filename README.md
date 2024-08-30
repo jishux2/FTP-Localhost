@@ -14,3 +14,8 @@
 - 右下输入框可输入FTP命令，如`ls`, `cd`, `get`, `put`等。`Ctrl+Enter`换行，`Enter`或发送按钮执行。发送按钮菜单可选`Enter`或`Ctrl+Enter`发送模式
 - 状态栏位于窗口的底部，用一个进度条展示文件传输的百分比。另外一个标签显示取消下载后释放缓冲区的状态。一个按钮可以切换传输的暂停或继续
 - 菜单栏提供了菜单选项，点击后可弹出Changelog或帮助对话框，分别展示程序的更新日志和功能说明
+
+### 运行截图
+![image](https://github.com/user-attachments/assets/6357f58c-04c7-4390-9c58-cc848ffc6375)
+![image](https://github.com/user-attachments/assets/369d4b9c-a7b2-4d38-a807-6872997b698c)
+![image](https://github.com/user-attachments/assets/fd751958-142a-4c58-a85f-19d3a9b996d2)
